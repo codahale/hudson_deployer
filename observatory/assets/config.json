@@ -1,0 +1,92 @@
+{
+  "http": {
+    "port": 8080,
+    "max_connections": 100,
+    "shutdown_milliseconds": 2000,
+    "core_pool_size": 10,
+    "max_pool_size": 200,
+    "keep_alive_time": 1000
+  },
+
+  "metrics": {
+    "port": 8081
+  },
+
+  "queue": {
+    "persisted": true,
+    "cluster_password": "wordosodfoft",
+    "paging_directory": "hornet/paging",
+    "max_size_bytes": 268435456,
+    "page_size_bytes": 10485760,
+    "session_pool": {
+      "max_active": 100,
+      "max_idle": 8,
+      "max_wait": 1000,
+      "test_on_borrow": true,
+      "test_on_return": false
+    },
+    "journal": {
+      "type": "aio",
+      "directory": "hornet/data",
+      "min_files": 10,
+      "sync_non_transactional": true,
+      "sync_transactional": true,
+      "log_write_rate": false
+    }
+},
+
+  "event_consumer": {
+    "max_size": 1000,
+    "write_threshold_millis": 1000,
+    "batch_write_size": 1000,
+    "delay_on_error_millis": 1000
+  },
+
+  "database": {
+    "jdbc_url": "jdbc:vertica://vdb-001:5433/yamhouse",
+    "driver_class": "com.vertica.Driver",
+    "user": "verthouse",
+    "password": "wordosodfoft",
+    "acquire_retry_attempts": 5,
+    "connection_check_table": "c3p0",
+    "test_connection_on_checkout": true,
+    "test_connection_on_checkin": false,
+    "max_connection_age_in_seconds": 3600
+  },
+
+  "logging": {
+    // The default logger level.
+    "level": "info",
+
+    // A set of specific logger levels.
+    "loggers": {
+      "com.yammer.observatory": "info"
+    },
+
+    "console": {
+      // Whether or not to output log statements to STDOUT.
+      "enabled": true,
+
+      // The log level threshold for console logging.
+      "threshold": "all"
+    },
+
+    "file": {
+      // Whether or not to output log statement to a log file.
+      "enabled": false,
+
+      // The filename pattern for the log file.
+      "filename": "./logs/notifications.log",
+
+      // Let logs get to 50MB in size.
+      "max_log_size_kilobytes": 51200,
+
+      // Retain the last five log files.
+      "retain_files": 5,
+
+      // The log level threshold for file logging.
+      "threshold": "all"
+    }
+  }
+
+}

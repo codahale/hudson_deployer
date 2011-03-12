@@ -36,6 +36,8 @@ Capistrano::Configuration.instance(:must_exist).load do
   _cset(:application) { abort ":application must be set" }
   _cset(:version) { abort ":version must be set (e.g. 2.0.0)" }
   _cset(:user) { abort ":user must be set" }
+  _cset(:directory) { "/opt/#{application}" }
+  _cset(:current_release) { "#{directory}/#{Time.now.to_i}" }
 
   def hud_api(url)
     JSON.parse(RestClient.get(url + "/api/json"))
@@ -76,12 +78,12 @@ Capistrano::Configuration.instance(:must_exist).load do
         puts "#{index}: #{artifact["relativePath"]}"
       end
       print  "? "
-      artifact_index = Capistrano::CLI.ui.ask("choice").to_i
+      artifact_index = Capistrano::CLI.ui.ask("choice: ").to_i
       artifacts[artifact_index]
     else
       artifacts.first
     end
-    artifact["relativePath"]
+    latest_build["url"] + "artifact/" + artifact["relativePath"]
   end
   
   def build_deployment
@@ -95,11 +97,31 @@ Capistrano::Configuration.instance(:must_exist).load do
     end
   end
 
-  task "deploy" do
+  def ensure_directory
+    run "#{sudo} mkdir -p #{directory}", :roles => "app"
+    run "#{sudo} chown -R #{user} #{directory}", :roles => "app"
+  end
+  
+  def make_release_directory
+    run "#{sudo} mkdir -p #{current_release}", :roles => "app"
+    run "#{sudo} chown -R #{user} #{current_release}", :roles => "app"
+  end
+
+  task :deploy do
     @deploy = build_deployment
     @deploy.debug
-    
+    ensure_directory
+    create_local_build
+    make_release_directory
+    transfer_build
+    bounce_server
   end
 
 end
+
+
+
+
+
+
 
