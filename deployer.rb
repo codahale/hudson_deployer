@@ -33,75 +33,96 @@ Capistrano::Configuration.instance(:must_exist).load do
     end
   end
 
+  def hud_api(url)
+    JSON.parse(RestClient.get(url + "/api/json"))
+  end
+
+  # required variables
+  ######################################################################
+
   _cset(:hudson) { abort ":hudson must be set (e.g. build.yammer.com)" }
   _cset(:application) { abort ":application must be set" }
   _cset(:build) { abort ":build must be set (e.g. app-release)" }
   _cset(:version) { abort ":version must be set (e.g. 2.0.0)" }
   _cset(:user) { abort ":user must be set" }
-  _cset(:directory) { "/opt/#{application}" }
-  _cset(:current_release) { "#{directory}/releases/#{Time.now.to_i}" }
+  _cset(:launch_command) { abort ":launch_command must be set" }
 
-  def hud_api(url)
-    JSON.parse(RestClient.get(url + "/api/json"))
+
+  # derived variables
+  ######################################################################
+
+  set(:directory) { "/opt/#{application}" }
+  
+  set(:current_release) { "#{directory}/releases/#{Time.now.to_i}" }
+
+  set(:job) do
+    record = hud_api(hudson)["jobs"].find { |j| j["name"] == build }
+    abort("No such hudson build could be found") if !record
+    hud_api(record["url"])
   end
 
-  def job
-    @job ||= begin
-      record = hud_api(hudson)["jobs"].find { |j| j["name"] == build }
-      raise "No such hudson build could be found" if !record
-      hud_api(record["url"])
-    end
-  end
-  
-  def latest_build
-    @latest_build ||= begin
-      builds = job["builds"]
-      raise "There are no existing builds for this project" if builds.empty?
-      url = builds.first["url"]
-      hud_api(url)
-    end
-  end
-  
-  def check_latest_build
-    if latest_build["result"] != "SUCCESS"
-      raise "The last build was not successful: #{build["result"]}"
-    end
-    if latest_build["building"] == true
-      raise "Project is currently building. You must wait until it finishes."
-    end
-  end
-  
-  def resolve_artifact_url
-    @artifact_url = begin
-      artifacts = latest_build["artifacts"]
-      raise "No artifacts exist for this project!" if artifacts.empty?
-      artifact = if artifacts.length > 1
-        puts "More than one artifact was found. Please choose:"
-        artifacts.each_with_index do |artifact, index|
-          puts "#{index}: #{artifact["relativePath"]}"
-        end
-        print  "? "
-        artifact_index = Capistrano::CLI.ui.ask("choice: ").to_i
-        artifacts[artifact_index]
-      else
-        artifacts.first
+  set(:current_build) do
+    builds = job["builds"]
+    abort("There are no existing builds for this project") if builds.empty?
+    url = builds.first["url"]
+    hud_api(url).tap do |b|
+      if b["result"] != "SUCCESS"
+        abort("The last build was not successful: #{b["result"]}")
       end
-      latest_build["url"] + "artifact/" + artifact["relativePath"]
+      if b["building"] == true
+        abort("Project is currently building. You must wait until it finishes.")
+      end
+    end
+  end
+
+  set(:artifact_url) do
+    artifacts = current_build["artifacts"]
+    if artifacts.empty?
+      abort("No artifacts exist for this project!")
+    end
+    artifact = if artifacts.length > 1
+      puts "More than one artifact was found. Please choose:"
+      artifacts.each_with_index do |artifact, index|
+        puts "#{index}: #{artifact["relativePath"]}"
+      end
+      print  "? "
+      artifact_index = Capistrano::CLI.ui.ask("choice: ").to_i
+      artifacts[artifact_index]
+    else
+      artifacts.first
+    end
+    current_build["url"] + "artifact/" + artifact["relativePath"]
+  end
+
+  set(:artifact_filename) do
+    artifact_url.split("/").last
+  end
+  
+  set(:tmpdir) do
+    "/tmp/deployer-#{Time.now.to_i}".tap do |tmp|
+      FileUtils.mkdir_p(tmp)
     end
   end
   
-  def artifact_filename
-    @artifact_url.split("/").last
+  set(:local_entries) do
+    Dir.entries(File.expand_path(File.dirname(__FILE__) + "/" + application)).reject do |name|
+      name =~ /^\./ || name == "Capfile"
+    end
+  end
+  
+  set(:script_names) do
+    Dir.entries(File.expand_path(File.dirname(__FILE__) + "/" + application + "/scripts")).reject do |name|
+      name =~ /^\./
+    end
   end
   
   def build_deployment
-    check_latest_build
     Deploy.new do |d|
       d.application = application
       d.version = version
       d.user = user
-      d.build_num = latest_build["number"]
-      d.artifact_url = resolve_artifact_url
+      d.build_num = current_build["number"]
+      d.artifact_url = artifact_url
     end
   end
 
@@ -115,23 +136,9 @@ Capistrano::Configuration.instance(:must_exist).load do
     run "#{sudo} chown -R #{user} #{current_release}", :roles => "app"
   end
   
-  def create_local_tmp_directory
-    @tmpdir = "/tmp/deployer-#{Time.now.to_i}"
-    FileUtils.mkdir_p(@tmpdir)
-  end
-  
-  def local_entries
-    Dir.entries(File.expand_path(File.dirname(__FILE__) + "/" + application))
-  end
-  
-  def local_actions
-    local_entries.select { |f| f =~ /\.erb$/ }
-  end
-  
   def create_local_build
     from = File.expand_path(File.dirname(__FILE__) + "/" + application)
-    local_entries.reject { |f| f =~ /^\./ || f == "Capfile" || f =~ /\.erb$/ }.
-      each { |f| FileUtils.cp_r f, @tmpdir, :verbose => true }
+    local_entries.each { |f| FileUtils.cp_r f, tmpdir, :verbose => true }
   end
   
   def verify_plan
@@ -139,9 +146,7 @@ Capistrano::Configuration.instance(:must_exist).load do
     puts "Deployment plan:"
     @deploy.debug
     puts "Copying assets:"
-    puts `find #{@tmpdir}`
-    puts "The following actions will be rendered and executed on the remote host:"
-    local_actions.each { |a| puts ">> #{a} "}
+    puts `find #{tmpdir}`
     puts "*" * 80
     unless Capistrano::CLI.ui.ask("Is this what you want?") =~ /^y.*/i
       exit
@@ -150,24 +155,33 @@ Capistrano::Configuration.instance(:must_exist).load do
 
   def download_artifact
     puts "Downloading artifact..."
-    `wget #{@deploy.artifact_url} -O #{@tmpdir}/#{artifact_filename}`
+    `wget #{@deploy.artifact_url} -O #{tmpdir}/#{artifact_filename}`
+  end
+  
+  def erb(text)
+    ERB.new(text).result(binding)
   end
 
-  def render_actions
-    local_actions.each do |file|
-      puts "Rendering action: " + file
-      template = ERB.new(File.read(file))
+  def render_scripts
+    script_names.each do |script_name|
+      filename = tmpdir + "/scripts/" + script_name
+      template = ERB.new(File.read(filename))
       rendered = template.result(binding)
-      new_filename = file.split(".").reverse.drop(1).reverse.join(".")
-      File.open("#{@tmpdir}/#{new_filename}", "w") { |f| f.puts(rendered) }
+      File.open(filename, "w") { |f| f.puts(rendered) }
     end
   end
 
+  def execute_actions
+    @rendered_actions.each do |action|
+      run "cd #{current_release} && sh #{action}"
+    end
+  end
+  
   def transfer_build
     puts "Transferring build..."
-    Dir.entries(@tmpdir).each do |e|
+    Dir.entries(tmpdir).each do |e|
       unless e =~ /^\./
-        upload "#{@tmpdir}/#{e}", "#{current_release}/#{e}"
+        upload "#{tmpdir}/#{e}", "#{current_release}/#{e}"
       end
     end
   end
@@ -178,32 +192,28 @@ Capistrano::Configuration.instance(:must_exist).load do
     run "#{sudo} ln -sF #{current_release} #{link}"
   end
   
-  def cleanup
-    FileUtils.rm_r @tmpdir
+  task :bounce do
+    script_names.each do |script|
+      run "cd #{current_release} && sh scripts/#{script}"
+    end
   end
   
-  def rollback
+  def cleanup
+    FileUtils.rm_r tmpdir
   end
   
   task :deploy do
     @deploy = build_deployment
     ensure_remote_directory
-    create_local_tmp_directory
     create_local_build
     download_artifact
-    render_actions
+    render_scripts
     verify_plan
-    
     make_release_directory
-    begin
-      transfer_build
-      symlink
-      # bounce_server
-    rescue StandardError => ex
-      # rollback
-    end
-    
-    # cleanup
+    transfer_build
+    symlink
+    bounce
+    cleanup
   end
 
 end
