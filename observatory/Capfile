@@ -1,9 +1,0 @@
-require '../deployer'
-
-set :hudson, "build.yammer.com"
-set :application, "observatory"
-set :build, "observatory-release"
-set :version, "2.0.0"
-set :user, "cvandyck"
-
-role :app, "localhost"
