@@ -167,9 +167,15 @@ Capistrano::Configuration.instance(:must_exist).load do
     puts "Transferring build..."
     Dir.entries(@tmpdir).each do |e|
       unless e =~ /^\./
-        upload e, "#{current_release}/#{e}", :roles => "app"
+        upload "#{@tmpdir}/#{e}", "#{current_release}/#{e}"
       end
     end
+  end
+  
+  def symlink
+    link = "#{current_release}/../current"
+    run "#{sudo} rm #{link} || true"
+    run "#{sudo} ln -sF #{current_release} #{link}"
   end
   
   def cleanup
@@ -191,12 +197,13 @@ Capistrano::Configuration.instance(:must_exist).load do
     make_release_directory
     begin
       transfer_build
+      symlink
       # bounce_server
     rescue StandardError => ex
-      rollback
+      # rollback
     end
     
-    cleanup
+    # cleanup
   end
 
 end
