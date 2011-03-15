@@ -110,8 +110,8 @@ Capistrano::Configuration.instance(:must_exist).load do
     end
   end
   
-  set(:script_names) do
-    Dir.entries(File.expand_path(File.dirname(__FILE__) + "/" + application + "/scripts")).reject do |name|
+  set(:template_names) do
+    Dir.entries(File.expand_path(File.dirname(__FILE__) + "/" + application + "/templates")).reject do |name|
       name =~ /^\./
     end
   end
@@ -126,14 +126,9 @@ Capistrano::Configuration.instance(:must_exist).load do
     end
   end
 
-  def ensure_remote_directory
-    run "#{sudo} mkdir -p #{directory}", :roles => "app"
-    run "#{sudo} chown -R #{user} #{directory}", :roles => "app"
-  end
-  
   def make_release_directory
     run "#{sudo} mkdir -p #{current_release}", :roles => "app"
-    run "#{sudo} chown -R #{user} #{current_release}", :roles => "app"
+    run "#{sudo} chown -R #{deployer} #{current_release}", :roles => "app"
   end
   
   def create_local_build
@@ -158,19 +153,6 @@ Capistrano::Configuration.instance(:must_exist).load do
     `wget #{@deploy.artifact_url} -O #{tmpdir}/#{artifact_filename}`
   end
   
-  def erb(text)
-    ERB.new(text).result(binding)
-  end
-
-  def render_scripts
-    script_names.each do |script_name|
-      filename = tmpdir + "/scripts/" + script_name
-      template = ERB.new(File.read(filename))
-      rendered = template.result(binding)
-      File.open(filename, "w") { |f| f.puts(rendered) }
-    end
-  end
-
   def execute_actions
     @rendered_actions.each do |action|
       run "cd #{current_release} && sh #{action}"
@@ -181,7 +163,10 @@ Capistrano::Configuration.instance(:must_exist).load do
     puts "Transferring build..."
     Dir.entries(tmpdir).each do |e|
       unless e =~ /^\./
-        upload "#{tmpdir}/#{e}", "#{current_release}/#{e}"
+        tmpfile = "/tmp/#{Time.now.to_i}"
+        upload "#{tmpdir}/#{e}", tmpfile
+        run "#{sudo} mv #{tmpfile} #{current_release}/#{e}"
+        run "#{sudo} chown -R #{deployer}:#{deployer} #{current_release}/#{e}"
       end
     end
   end
@@ -192,28 +177,71 @@ Capistrano::Configuration.instance(:must_exist).load do
     run "#{sudo} ln -sF #{current_release} #{link}"
   end
   
-  task :bounce do
-    script_names.each do |script|
-      run "cd #{current_release} && sh scripts/#{script}"
-    end
-  end
-  
   def cleanup
     FileUtils.rm_r tmpdir
   end
+
+  def create_user(username, opts={})
+    create_directory(directory, :owner => deployer, :group => deployer) do
+      run "if ! id #{username} > /dev/null 2>&1; then #{sudo} useradd --no-create-home --home-dir #{opts[:homedir]} --shell #{opts[:shell]} #{username}; fi", :roles => "app"
+    end
+  end
+  
+  def create_directory(path, opts={})
+    opts = { :owner => deployer, :group => deployer, :mode => "0755" }.merge(opts)
+    run "#{sudo} mkdir -p #{path}", :roles => "app"
+    yield if block_given?
+    run "#{sudo} chmod #{opts[:mode]} #{path}"
+    run "#{sudo} chown -R #{opts[:owner]}:#{opts[:group]} #{path}", :roles => "app"
+  end
+  
+  def touch(path, opts={})
+    opts = { :owner => deployer, :group => deployer, :mode => "0755" }.merge(opts)
+    run "#{sudo} touch #{path}"
+    run "#{sudo} chown #{opts[:owner]}:#{opts[:group]} #{path}", :roles => "app"
+  end
+  
+  def render_template(path, opts={})
+    opts = { :owner => deployer, :group => deployer, :mode => "0644" }.merge(opts)
+    data = erb(File.read("templates/#{opts[:template]}"))
+    filename = "/tmp/file-#{Time.now.to_i}"
+    put data, filename
+    run "#{sudo} mv #{filename} #{path}"
+    run "#{sudo} chmod #{opts[:mode]} #{path}"
+    run "#{sudo} chown -R #{opts[:owner]}:#{opts[:group]} #{path}", :roles => "app"
+  end
+  
+  def upstart(path, opts={})
+    render_template path, :template => opts[:template], :owner => "root", :group => "root"
+  end
+  
+  def erb(text)
+    ERB.new(text).result(binding)
+  end
+
+  def render_scripts
+    template_names.each do |script_name|
+      filename = tmpdir + "/scripts/" + script_name
+      template = ERB.new(File.read(filename))
+      rendered = template.result(binding)
+      File.open(filename, "w") { |f| f.puts(rendered) }
+    end
+  end
+
+  task :init do
+    puts "Initializing..."
+  end
+  
+  before :deploy, [:init]
   
   task :deploy do
     @deploy = build_deployment
-    ensure_remote_directory
     create_local_build
     download_artifact
-    render_scripts
     verify_plan
     make_release_directory
     transfer_build
     symlink
-    bounce
-    cleanup
   end
 
 end
