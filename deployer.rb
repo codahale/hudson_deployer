@@ -37,6 +37,32 @@ Capistrano::Configuration.instance(:must_exist).load do
     JSON.parse(RestClient.get(url + "/api/json"))
   end
 
+  # environment configuration
+  ######################################################################
+
+  # by default we are in the staging environment
+  @env = :staging
+  
+  task :staging do
+    @env = :staging
+  end
+  
+  task :production do
+    @env = :production
+  end
+  
+  set(:config) do
+    {
+      :default => {},
+      :staging => {},
+      :production => {}
+    }
+  end
+  
+  def config_h
+    config[:default].merge(config[@env])
+  end
+
   # required variables
   ######################################################################
 
@@ -46,7 +72,6 @@ Capistrano::Configuration.instance(:must_exist).load do
   _cset(:version) { abort ":version must be set (e.g. 2.0.0)" }
   _cset(:user) { abort ":user must be set" }
   _cset(:launch_command) { abort ":launch_command must be set" }
-
 
   # derived variables
   ######################################################################
@@ -229,7 +254,17 @@ Capistrano::Configuration.instance(:must_exist).load do
   end
 
   task :init do
-    puts "Initializing..."
+    puts "Setting user and roles from config"
+    if u = config_h[:user]
+      puts "Setting user to #{u}"
+      set :user, u
+    end
+    if roles = config_h[:roles]
+      roles.each do |h,v|
+        puts "Setting role #{h} => #{v}"
+        role h, v
+      end
+    end
   end
   
   before :deploy, [:init]
