@@ -54,7 +54,7 @@ This gem was written to help simplify Java deployments using fat-jar hudson buil
 
 Templates are kept in a folder called "templates".  They can be named anything, but to make your life easier suffix them with .erb.  Render templates with 
 
-	render_template(/etc/broccoli, :template => "broccoli.erb")
+	render_template("/etc/broccoli", :template => "broccoli.erb")
 
 Note that the :template parameter assumes a path relative to the templates folder.
 
