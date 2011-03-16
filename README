@@ -1,0 +1,64 @@
+## Overview
+
+This gem was written to help simplify Java deployments using fat-jar hudson builds.
+
+## Example Capfile
+
+	require 'hudson_deployer'
+
+	set  :hudson, "build.company.com"
+	set  :application, "project"
+	set  :build, "project-release"
+	set  :version, "2.0.0"
+	set  :deployer, "deploy"
+
+	config[:default] = { 
+	  :jdbc_url => "jdbc:mysql://localhost:3306/project" 
+	}
+
+	config[:staging] = {
+	  :user => "cvandyck",
+	  :roles => {
+	    :app => "192.168.185.132"
+	  }
+	}
+
+	config[:production] = {
+	  :user => "admin",
+	  :roles => {
+	    :app => "production-001"
+	  }
+	}
+
+	before :deploy do
+	  if @env == :production
+	    run "#{sudo} apt-get install sun-java6-jdk dbus hal -y"
+	  else
+	    run "#{sudo} apt-get install openjdk-6-jdk dbus hal -y"
+	  end
+	  create_user deployer, :homedir => "/opt/project", :shell => "/bin/sh"
+	  create_directory "/var/log/project"
+	  touch "/var/log/project/sysout.log"
+	end
+
+	after :deploy do
+	  render_template "/etc/project.conf", :template => "project.conf.erb", :mode => "0600"
+	  render_template "/etc/project.jvm.conf", :template => "#{@env}/project.jvm.conf.erb", :mode => "0644"
+	  upstart "/etc/init/project.conf", :template => "upstart.conf.erb"
+	  run "#{sudo} stop project || true"
+	  sleep 5
+	  run "#{sudo} start project"
+	end
+
+## Templates
+
+Templates are kept in a folder called "templates".  They can be named anything, but to make your life easier suffix them with .erb.  Render templates with 
+
+	render_template(/etc/broccoli, :template => "broccoli.erb")
+
+Note that the :template parameter assumes a path relative to the templates folder.
+
+## Upstart
+
+Servers are bounced using upstart. In the above example, we use upstart to render an upstart configuration file for our project.  Actual upstart commands are done using the Capistrano run command
+
