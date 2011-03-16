@@ -1,5 +1,5 @@
 LICENSE
 Manifest
-README
+README.md
 Rakefile
 lib/hudson_deployer.rb
