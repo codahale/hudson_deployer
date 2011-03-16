@@ -2,7 +2,7 @@ require 'rubygems'
 require 'rake'
 require 'echoe'
 
-Echoe.new('hudson_deployer', '0.0.1') do |p|
+Echoe.new('hudson_deployer', '0.0.2') do |p|
   p.description    = "Unmagical Capistrano deployment using Hudson"
   p.url            = "https://github.com/collinvandyck/hudson_deployer"
   p.author         = "Collin VanDyck"

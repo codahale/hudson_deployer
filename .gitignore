@@ -1,2 +1,3 @@
 /observatory
 *.gem
+.gemspec

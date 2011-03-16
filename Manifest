@@ -2,4 +2,5 @@ LICENSE
 Manifest
 README.md
 Rakefile
+hudson_deployer.gemspec
 lib/hudson_deployer.rb

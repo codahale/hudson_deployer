@@ -130,13 +130,13 @@ Capistrano::Configuration.instance(:must_exist).load do
   end
   
   set(:local_entries) do
-    Dir.entries(File.expand_path(File.dirname(__FILE__) + "/" + application)).reject do |name|
+    Dir.entries(File.expand_path(Dir.pwd)).reject do |name|
       name =~ /^\./ || name == "Capfile"
     end
   end
   
   set(:template_names) do
-    Dir.entries(File.expand_path(File.dirname(__FILE__) + "/" + application + "/templates")).reject do |name|
+    Dir.entries(File.expand_path(Dir.pwd + "/templates")).reject do |name|
       name =~ /^\./
     end
   end
@@ -157,7 +157,7 @@ Capistrano::Configuration.instance(:must_exist).load do
   end
   
   def create_local_build
-    from = File.expand_path(File.dirname(__FILE__) + "/" + application)
+    from = File.expand_path(Dir.pwd + "/" + application)
     local_entries.each { |f| FileUtils.cp_r f, tmpdir, :verbose => true }
   end
   
