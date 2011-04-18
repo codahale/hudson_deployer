@@ -8,6 +8,6 @@ Echoe.new('hudson_deployer', '0.0.2') do |p|
   p.author         = "Collin VanDyck"
   p.email          = "collinvandyck @nospam@ gmail.com"
   p.ignore_pattern = ["tmp/*", "script/*"]
-  p.runtime_dependencies = ["rest-client"]
+  p.runtime_dependencies = ["rest-client", "json"]
   p.development_dependencies = []
 end
