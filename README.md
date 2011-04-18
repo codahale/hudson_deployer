@@ -9,7 +9,7 @@ This gem was written to help simplify Java deployments using fat-jar hudson buil
 	set  :hudson, "build.company.com"
 	set  :application, "project"
 	set  :build, "project-release"
-	set  :deployer, "deploy"
+	set  :application_user, "project"
 
 	config[:default] = { 
 	  :jdbc_url => "jdbc:mysql://localhost:3306/project" 

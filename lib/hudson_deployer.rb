@@ -68,7 +68,7 @@ Capistrano::Configuration.instance(:must_exist).load do
   _cset(:hudson) { abort ":hudson must be set (e.g. build.yammer.com)" }
   _cset(:application) { abort ":application must be set" }
   _cset(:build) { abort ":build must be set (e.g. app-release)" }
-  _cset(:user) { abort ":user must be set" }
+  _cset(:application_user) { abort ":application_user must be set" }
   _cset(:launch_command) { abort ":launch_command must be set" }
 
   # derived variables
@@ -150,7 +150,7 @@ Capistrano::Configuration.instance(:must_exist).load do
 
   def make_release_directory
     run "#{sudo} mkdir -p #{current_release}", :roles => "app"
-    run "#{sudo} chown -R #{deployer} #{current_release}", :roles => "app"
+    run "#{sudo} chown -R #{application_user} #{current_release}", :roles => "app"
   end
   
   def create_local_build
@@ -188,7 +188,7 @@ Capistrano::Configuration.instance(:must_exist).load do
         tmpfile = "/tmp/#{Time.now.to_i}"
         upload "#{tmpdir}/#{e}", tmpfile
         run "#{sudo} mv #{tmpfile} #{current_release}/#{e}"
-        run "#{sudo} chown -R #{deployer}:#{deployer} #{current_release}/#{e}"
+        run "#{sudo} chown -R #{application_user}:#{application_user} #{current_release}/#{e}"
       end
     end
   end
@@ -204,13 +204,13 @@ Capistrano::Configuration.instance(:must_exist).load do
   end
 
   def create_user(username, opts={})
-    create_directory(directory, :owner => deployer, :group => deployer) do
+    create_directory(directory, :owner => application_user, :group => application_user) do
       run "if ! id #{username} > /dev/null 2>&1; then #{sudo} useradd --no-create-home --home-dir #{opts[:homedir]} --shell #{opts[:shell]} #{username}; fi", :roles => "app"
     end
   end
   
   def create_directory(path, opts={})
-    opts = { :owner => deployer, :group => deployer, :mode => "0755" }.merge(opts)
+    opts = { :owner => application_user, :group => application_user, :mode => "0755" }.merge(opts)
     run "#{sudo} mkdir -p #{path}", :roles => "app"
     yield if block_given?
     run "#{sudo} chmod #{opts[:mode]} #{path}"
@@ -218,13 +218,13 @@ Capistrano::Configuration.instance(:must_exist).load do
   end
   
   def touch(path, opts={})
-    opts = { :owner => deployer, :group => deployer, :mode => "0755" }.merge(opts)
+    opts = { :owner => application_user, :group => application_user, :mode => "0755" }.merge(opts)
     run "#{sudo} touch #{path}"
     run "#{sudo} chown #{opts[:owner]}:#{opts[:group]} #{path}", :roles => "app"
   end
   
   def render_template(path, opts={})
-    opts = { :owner => deployer, :group => deployer, :mode => "0644" }.merge(opts)
+    opts = { :owner => application_user, :group => application_user, :mode => "0644" }.merge(opts)
     data = erb(File.read("templates/#{opts[:template]}"))
     filename = "/tmp/file-#{Time.now.to_i}"
     put data, filename
