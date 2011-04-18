@@ -4,10 +4,9 @@ require 'json'
 require 'erb'
 
 class Deploy
-  attr_accessor :application, 
-                :version, 
-                :user, 
-                :build_num, 
+  attr_accessor :application,
+                :user,
+                :build_num,
                 :artifact_url
                 
   def initialize(&block)
@@ -18,7 +17,7 @@ class Deploy
   
   def debug
     puts "Deployment Configuration:"
-    [:application, :version, :user, :build_num].each do |f|
+    [:application, :user, :build_num].each do |f|
       puts "  #{f}: #{send(f)}"
     end
   end
@@ -69,7 +68,6 @@ Capistrano::Configuration.instance(:must_exist).load do
   _cset(:hudson) { abort ":hudson must be set (e.g. build.yammer.com)" }
   _cset(:application) { abort ":application must be set" }
   _cset(:build) { abort ":build must be set (e.g. app-release)" }
-  _cset(:version) { abort ":version must be set (e.g. 2.0.0)" }
   _cset(:user) { abort ":user must be set" }
   _cset(:launch_command) { abort ":launch_command must be set" }
 
@@ -144,7 +142,6 @@ Capistrano::Configuration.instance(:must_exist).load do
   def build_deployment
     Deploy.new do |d|
       d.application = application
-      d.version = version
       d.user = user
       d.build_num = current_build["number"]
       d.artifact_url = artifact_url

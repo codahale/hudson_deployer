@@ -9,7 +9,6 @@ This gem was written to help simplify Java deployments using fat-jar hudson buil
 	set  :hudson, "build.company.com"
 	set  :application, "project"
 	set  :build, "project-release"
-	set  :version, "2.0.0"
 	set  :deployer, "deploy"
 
 	config[:default] = { 
